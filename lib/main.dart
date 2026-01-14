@@ -4,9 +4,12 @@ import 'firebase_options.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
 import 'screens/auth/login_screen.dart';
+import 'screens/admin/admin_home_screen.dart';
 import 'screens/doctor/doctor_home_screen.dart';
 import 'screens/patient/patient_home_screen.dart';
+
 import 'services/auth_service.dart';
 import 'models/user_model.dart';
 
@@ -64,10 +67,17 @@ class AuthWrapper extends StatelessWidget {
 
               if (userSnapshot.hasData) {
                 final user = userSnapshot.data!;
-                if (user.role == 'doctor') {
-                  return DoctorHomeScreen(user: user);
-                } else {
-                  return PatientHomeScreen(user: user);
+
+                switch (user.role) {
+                  case 'admin':
+                    return AdminHomeScreen(user: user);
+                  case 'doctor':
+                    return DoctorHomeScreen(user: user);
+                  case 'patient':
+                    return PatientHomeScreen(user: user);
+                  default:
+                  // Safety fallback
+                    return const LoginScreen();
                 }
               }
 

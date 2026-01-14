@@ -69,9 +69,13 @@ class AuthService {
   // Get user data from Firestore
   Future<UserModel?> getUserData(String uid) async {
     try {
-      DocumentSnapshot doc = await _firestore.collection('users').doc(uid).get();
+      DocumentSnapshot doc =
+          await _firestore.collection('users').doc(uid).get();
       if (doc.exists) {
-        return UserModel.fromMap(doc.data() as Map<String, dynamic>);
+        return UserModel.fromMap(
+          doc.data() as Map<String, dynamic>,
+          doc.id, // <-- THIS IS THE UID
+        );
       }
     } catch (e) {
       print('Get user data error: $e');

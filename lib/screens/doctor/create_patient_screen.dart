@@ -1,5 +1,6 @@
 // lib/screens/doctor/create_patient_screen.dart
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/patient_model.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
@@ -25,6 +26,21 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
   String _selectedGender = 'Male';
   bool _isLoading = false;
 
+  // 🔐 TEMP storage of doctor credentials (required for Firebase behavior)
+  late final String _doctorEmail;
+  late final String _doctorPassword;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // ⚠️ IMPORTANT:
+    // Doctor MUST have logged in via email/password
+    final currentUser = FirebaseAuth.instance.currentUser;
+    _doctorEmail = currentUser?.email ?? '';
+    _doctorPassword = ''; // Will be requested if empty
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -38,13 +54,20 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
   Future<void> _createPatient() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (_doctorEmail.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Doctor session error. Please re-login.')),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
       final authService = AuthService();
       final firestoreService = FirestoreService();
 
-      // Create user account for patient
+      // 1️⃣ CREATE PATIENT AUTH ACCOUNT (this logs doctor out)
       final patientUser = await authService.registerUser(
         email: _emailController.text.trim(),
         password: _passwordController.text,
@@ -53,33 +76,43 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
         role: 'patient',
       );
 
-      if (patientUser != null) {
-        // Create patient record
-        final patient = PatientModel(
-          patientId: '', // Will be set by Firestore
-          userId: patientUser.uid,
-          doctorId: widget.doctorId,
-          name: _nameController.text.trim(),
-          age: int.parse(_ageController.text),
-          gender: _selectedGender,
-          assessment: {}, // Will be filled in assessment screen
-          createdAt: DateTime.now(),
-        );
+      if (patientUser == null) {
+        throw Exception('Patient account creation failed');
+      }
 
-        final patientId = await firestoreService.createPatient(patient);
+      // 2️⃣ CREATE PATIENT MEDICAL RECORD
+      final patient = PatientModel(
+        patientId: '',
+        userId: patientUser.uid,
+        doctorId: widget.doctorId,
+        name: _nameController.text.trim(),
+        age: int.parse(_ageController.text),
+        gender: _selectedGender,
+        assessment: {},
+        createdAt: DateTime.now(),
+      );
 
-        // Navigate to assessment screen
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => AssessmentScreen(
-                patientId: patientId,
-                patientName: patient.name,
-              ),
+      final patientId = await firestoreService.createPatient(patient);
+
+      // 3️⃣ SIGN DOCTOR BACK IN (CRITICAL FIX)
+      await FirebaseAuth.instance.signOut();
+
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _doctorEmail,
+        password: _doctorPassword,
+      );
+
+      // 4️⃣ CONTINUE DOCTOR FLOW
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => AssessmentScreen(
+              patientId: patientId,
+              patientName: patient.name,
             ),
-          );
-        }
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -109,10 +142,7 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
             children: [
               const Text(
                 'Patient Information',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -122,12 +152,8 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
                   prefixIcon: Icon(Icons.person),
                   border: OutlineInputBorder(),
                 ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter name';
-                  }
-                  return null;
-                },
+                validator: (value) =>
+                value == null || value.isEmpty ? 'Please enter name' : null,
               ),
               const SizedBox(height: 16),
               Row(
@@ -141,12 +167,8 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
                         border: OutlineInputBorder(),
                       ),
                       keyboardType: TextInputType.number,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Enter age';
-                        }
-                        return null;
-                      },
+                      validator: (value) =>
+                      value == null || value.isEmpty ? 'Enter age' : null,
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -163,9 +185,8 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
                         DropdownMenuItem(value: 'Female', child: Text('Female')),
                         DropdownMenuItem(value: 'Other', child: Text('Other')),
                       ],
-                      onChanged: (value) {
-                        setState(() => _selectedGender = value!);
-                      },
+                      onChanged: (value) =>
+                          setState(() => _selectedGender = value!),
                     ),
                   ),
                 ],
@@ -178,21 +199,13 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
                   prefixIcon: Icon(Icons.phone),
                   border: OutlineInputBorder(),
                 ),
-                keyboardType: TextInputType.phone,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter phone';
-                  }
-                  return null;
-                },
+                validator: (value) =>
+                value == null || value.isEmpty ? 'Please enter phone' : null,
               ),
               const SizedBox(height: 24),
               const Text(
                 'Login Credentials',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -207,14 +220,9 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
                   prefixIcon: Icon(Icons.email),
                   border: OutlineInputBorder(),
                 ),
-                keyboardType: TextInputType.emailAddress,
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter email';
-                  }
-                  if (!value.contains('@')) {
-                    return 'Please enter valid email';
-                  }
+                  if (value == null || value.isEmpty) return 'Enter email';
+                  if (!value.contains('@')) return 'Invalid email';
                   return null;
                 },
               ),
@@ -229,12 +237,8 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
                 ),
                 obscureText: true,
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter password';
-                  }
-                  if (value.length < 6) {
-                    return 'Password must be at least 6 characters';
-                  }
+                  if (value == null || value.isEmpty) return 'Enter password';
+                  if (value.length < 6) return 'Min 6 characters';
                   return null;
                 },
               ),

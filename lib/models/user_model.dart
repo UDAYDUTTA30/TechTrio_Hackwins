@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class UserModel {
   final String uid;
   final String email;
-  final String role; // 'doctor' or 'patient'
+  final String role; // 'admin' | 'doctor' | 'patient'
   final String name;
   final String phone;
   final DateTime createdAt;
@@ -29,14 +29,22 @@ class UserModel {
     };
   }
 
-  factory UserModel.fromMap(Map<String, dynamic> map) {
+  factory UserModel.fromMap(Map<String, dynamic> map, String uid) {
+    final role = map['role'];
+
+    if (role != 'admin' && role != 'doctor' && role != 'patient') {
+      throw Exception('Invalid user role: $role');
+    }
+
     return UserModel(
-      uid: map['uid'] ?? '',
-      email: map['email'] ?? '',
-      role: map['role'] ?? '',
-      name: map['name'] ?? '',
-      phone: map['phone'] ?? '',
-      createdAt: (map['createdAt'] as Timestamp).toDate(),
+      uid: uid, // ✅ use document ID, NOT map['uid']
+      email: map['email'] as String,
+      role: role as String,
+      name: map['name'] as String,
+      phone: map['phone'] as String,
+      createdAt: map['createdAt'] != null
+          ? (map['createdAt'] as Timestamp).toDate()
+          : DateTime.now(),
     );
   }
 }
