@@ -1,13 +1,13 @@
-
 // lib/screens/patient/session_detail_screen.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/session_model.dart';
 import '../../models/feedback_model.dart';
 import '../../services/firestore_service.dart';
+import '../../services/gemini_service.dart';
 import 'submit_feedback_screen.dart';
 
-class SessionDetailScreen extends StatelessWidget {
+class SessionDetailScreen extends StatefulWidget {
   final SessionModel session;
   final String patientId;
 
@@ -18,16 +18,101 @@ class SessionDetailScreen extends StatelessWidget {
   });
 
   @override
+  State<SessionDetailScreen> createState() => _SessionDetailScreenState();
+}
+
+class _SessionDetailScreenState extends State<SessionDetailScreen> {
+  final firestoreService = FirestoreService();
+  bool _loadingAI = false;
+  String? _aiExplanation;
+
+  Future<void> _getAIExplanation() async {
+    setState(() => _loadingAI = true);
+
+    try {
+      final explanation = await GeminiService.explainTherapy(
+        therapyName: widget.session.therapyName,
+        prePrecautions: widget.session.prePrecautions,
+        postPrecautions: widget.session.postPrecautions,
+      );
+
+      setState(() {
+        _aiExplanation = explanation ?? 'Unable to generate explanation. Please try again.';
+        _loadingAI = false;
+      });
+
+      _showExplanationDialog();
+    } catch (e) {
+      setState(() {
+        _aiExplanation = 'Error: ${e.toString()}';
+        _loadingAI = false;
+      });
+      _showExplanationDialog();
+    }
+  }
+
+  void _showExplanationDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.lightbulb, color: Colors.amber),
+            SizedBox(width: 8),
+            Text('Understanding Your Therapy'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 16, color: Colors.amber),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'AI-generated explanation for informational purposes only',
+                        style: TextStyle(fontSize: 12, color: Colors.orange),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(_aiExplanation ?? 'Loading...'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final firestoreService = FirestoreService();
-    final isCompleted = session.status == 'completed';
+    final isCompleted = widget.session.status == 'completed';
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Session Details'),
+        backgroundColor: const Color(0xFF2E7D32),
+        foregroundColor: Colors.white,
       ),
       body: FutureBuilder<FeedbackModel?>(
-        future: firestoreService.getSessionFeedback(session.sessionId),
+        future: firestoreService.getSessionFeedback(widget.session.sessionId),
         builder: (context, feedbackSnapshot) {
           final feedback = feedbackSnapshot.data;
 
@@ -36,6 +121,7 @@ class SessionDetailScreen extends StatelessWidget {
             children: [
               // Session Info Card
               Card(
+                elevation: 2,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -45,7 +131,7 @@ class SessionDetailScreen extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              session.therapyName,
+                              widget.session.therapyName,
                               style: const TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold,
@@ -76,17 +162,17 @@ class SessionDetailScreen extends StatelessWidget {
                       _InfoRow(
                         icon: Icons.calendar_today,
                         label: 'Date',
-                        value: DateFormat('EEEE, MMM dd, yyyy').format(session.scheduledDate),
+                        value: DateFormat('EEEE, MMM dd, yyyy').format(widget.session.scheduledDate),
                       ),
                       _InfoRow(
                         icon: Icons.access_time,
                         label: 'Duration',
-                        value: session.duration,
+                        value: widget.session.duration,
                       ),
                       _InfoRow(
                         icon: Icons.numbers,
                         label: 'Session',
-                        value: '#${session.sessionNumber}',
+                        value: '#${widget.session.sessionNumber}',
                       ),
                     ],
                   ),
@@ -94,6 +180,26 @@ class SessionDetailScreen extends StatelessWidget {
               ),
 
               const SizedBox(height: 16),
+
+              // AI Explanation Button
+              OutlinedButton.icon(
+                onPressed: _loadingAI ? null : _getAIExplanation,
+                icon: _loadingAI
+                    ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                    : const Icon(Icons.lightbulb_outline),
+                label: Text(_loadingAI ? 'Loading...' : 'Explain This Therapy'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.all(16),
+                  foregroundColor: Colors.amber[700],
+                  side: BorderSide(color: Colors.amber[700]!),
+                ),
+              ),
+
+              const SizedBox(height: 24),
 
               // Pre-Session Precautions
               const Text(
@@ -110,7 +216,7 @@ class SessionDetailScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: session.prePrecautions.map((precaution) {
+                    children: widget.session.prePrecautions.map((precaution) {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Row(
@@ -144,7 +250,7 @@ class SessionDetailScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: session.postPrecautions.map((precaution) {
+                    children: widget.session.postPrecautions.map((precaution) {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Row(
@@ -175,6 +281,7 @@ class SessionDetailScreen extends StatelessWidget {
                 const SizedBox(height: 8),
                 Card(
                   color: Colors.green[50],
+                  elevation: 2,
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
@@ -232,8 +339,8 @@ class SessionDetailScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (context) => SubmitFeedbackScreen(
-                          session: session,
-                          patientId: patientId,
+                          session: widget.session,
+                          patientId: widget.patientId,
                         ),
                       ),
                     );
@@ -242,7 +349,7 @@ class SessionDetailScreen extends StatelessWidget {
                   label: const Text('Submit Feedback'),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: Colors.green,
+                    backgroundColor: const Color(0xFF2E7D32),
                     foregroundColor: Colors.white,
                   ),
                 ),

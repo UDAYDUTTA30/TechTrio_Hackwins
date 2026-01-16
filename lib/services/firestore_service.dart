@@ -1,4 +1,3 @@
-
 // lib/services/firestore_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/patient_model.dart';
@@ -6,6 +5,7 @@ import '../models/therapy_plan_model.dart';
 import '../models/session_model.dart';
 import '../models/feedback_model.dart';
 import '../models/therapy_template_model.dart';
+import 'therapy_template_service.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -24,6 +24,20 @@ class FirestoreService {
       return docRef.id;
     } catch (e) {
       print('Create patient error: $e');
+      rethrow;
+    }
+  }
+
+  // Update patient assessment
+  Future<void> updatePatientAssessment(
+      String patientId, Map<String, dynamic> assessment) async {
+    try {
+      await _firestore
+          .collection('patients')
+          .doc(patientId)
+          .update({'assessment': assessment});
+    } catch (e) {
+      print('Update assessment error: $e');
       rethrow;
     }
   }
@@ -195,9 +209,44 @@ class FirestoreService {
 
   // ========== THERAPY TEMPLATE OPERATIONS ==========
 
+  // ✅ NEW: Auto-seed templates if collection is empty
+  Future<void> ensureTemplatesExist() async {
+    try {
+      final snapshot = await _firestore
+          .collection('therapy_templates')
+          .limit(1)
+          .get();
+
+      // If templates already exist, do nothing
+      if (snapshot.docs.isNotEmpty) {
+        return;
+      }
+
+      // Otherwise, seed predefined templates
+      print('No templates found. Seeding predefined templates...');
+      final templates = TherapyTemplateService.getPredefinedTemplates();
+
+      WriteBatch batch = _firestore.batch();
+      for (var template in templates) {
+        DocumentReference docRef = _firestore
+            .collection('therapy_templates')
+            .doc(template.templateId);
+        batch.set(docRef, template.toMap());
+      }
+
+      await batch.commit();
+      print('✅ Templates seeded successfully');
+    } catch (e) {
+      print('Error seeding templates: $e');
+    }
+  }
+
   // Get all templates
   Future<List<TherapyTemplateModel>> getAllTemplates() async {
     try {
+      // ✅ Ensure templates exist before querying
+      await ensureTemplatesExist();
+
       QuerySnapshot snapshot = await _firestore
           .collection('therapy_templates')
           .get();
@@ -226,5 +275,48 @@ class FirestoreService {
       print('Get template error: $e');
     }
     return null;
+  }
+
+  // ========== DOCTOR DECISION OPERATIONS ==========
+
+  // Pause therapy plan
+  Future<void> pauseTherapyPlan(String planId, String reason) async {
+    try {
+      await _firestore.collection('therapy_plans').doc(planId).update({
+        'status': 'paused',
+        'pausedDate': Timestamp.now(),
+        'doctorNotes': reason,
+      });
+    } catch (e) {
+      print('Pause therapy plan error: $e');
+      rethrow;
+    }
+  }
+
+  // Continue/Resume therapy plan
+  Future<void> continueTherapyPlan(String planId, String notes) async {
+    try {
+      await _firestore.collection('therapy_plans').doc(planId).update({
+        'status': 'active',
+        'pausedDate': null,
+        'doctorNotes': notes,
+      });
+    } catch (e) {
+      print('Continue therapy plan error: $e');
+      rethrow;
+    }
+  }
+
+  // Mark therapy plan as completed
+  Future<void> completeTherapyPlan(String planId, String notes) async {
+    try {
+      await _firestore.collection('therapy_plans').doc(planId).update({
+        'status': 'completed',
+        'doctorNotes': notes,
+      });
+    } catch (e) {
+      print('Complete therapy plan error: $e');
+      rethrow;
+    }
   }
 }

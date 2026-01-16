@@ -1,16 +1,14 @@
 // lib/screens/doctor/assessment_screen.dart
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../services/firestore_service.dart';
 import 'select_template_screen.dart';
 
 class AssessmentScreen extends StatefulWidget {
   final String patientId;
-  final String patientName;
 
   const AssessmentScreen({
     super.key,
     required this.patientId,
-    required this.patientName,
   });
 
   @override
@@ -19,71 +17,63 @@ class AssessmentScreen extends StatefulWidget {
 
 class _AssessmentScreenState extends State<AssessmentScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _firestoreService = FirestoreService();
 
-  // Prakriti (Body Constitution)
-  String _vata = 'Moderate';
-  String _pitta = 'Moderate';
-  String _kapha = 'Moderate';
+  // Form controllers
+  final _chiefComplaintsController = TextEditingController();
+  final _medicalHistoryController = TextEditingController();
+  final _currentMedicationsController = TextEditingController();
+  final _allergiesController = TextEditingController();
 
-  // Symptoms
-  final Map<String, bool> _symptoms = {
-    'Joint Pain': false,
-    'Digestive Issues': false,
-    'Stress/Anxiety': false,
-    'Sleep Problems': false,
-    'Skin Issues': false,
-    'Headache': false,
-    'Fatigue': false,
-    'Other': false,
-  };
+  String _prakriti = 'Vata';
+  String _digestiveHealth = 'Good';
+  String _sleepQuality = 'Good';
+  String _stressLevel = 'Low';
 
-  final _notesController = TextEditingController();
-  final _chiefComplaintController = TextEditingController();
-  bool _isLoading = false;
+  bool _loading = false;
 
   @override
   void dispose() {
-    _notesController.dispose();
-    _chiefComplaintController.dispose();
+    _chiefComplaintsController.dispose();
+    _medicalHistoryController.dispose();
+    _currentMedicationsController.dispose();
+    _allergiesController.dispose();
     super.dispose();
   }
 
   Future<void> _saveAssessment() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
+    setState(() => _loading = true);
 
     try {
-      // Prepare assessment data
       final assessment = {
-        'prakriti': {
-          'vata': _vata,
-          'pitta': _pitta,
-          'kapha': _kapha,
-        },
-        'symptoms': _symptoms.entries
-            .where((entry) => entry.value)
-            .map((entry) => entry.key)
-            .toList(),
-        'chiefComplaint': _chiefComplaintController.text.trim(),
-        'notes': _notesController.text.trim(),
-        'assessmentDate': Timestamp.now(),
+        'chiefComplaints': _chiefComplaintsController.text.trim(),
+        'medicalHistory': _medicalHistoryController.text.trim(),
+        'currentMedications': _currentMedicationsController.text.trim(),
+        'allergies': _allergiesController.text.trim(),
+        'prakriti': _prakriti,
+        'digestiveHealth': _digestiveHealth,
+        'sleepQuality': _sleepQuality,
+        'stressLevel': _stressLevel,
+        'assessmentDate': DateTime.now().toIso8601String(),
       };
 
-      // Update patient record
-      await FirebaseFirestore.instance
-          .collection('patients')
-          .doc(widget.patientId)
-          .update({'assessment': assessment});
+      await _firestoreService.updatePatientAssessment(
+        widget.patientId,
+        assessment,
+      );
 
       if (mounted) {
-        // Navigate to template selection
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Assessment saved successfully')),
+        );
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) => SelectTemplateScreen(
+            builder: (_) => SelectTemplateScreen(
               patientId: widget.patientId,
-              patientName: widget.patientName,
             ),
           ),
         );
@@ -91,182 +81,191 @@ class _AssessmentScreenState extends State<AssessmentScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
+          SnackBar(content: Text('Error saving assessment: $e')),
         );
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _loading = false);
       }
     }
-  }
-
-  Widget _buildPrakritiSelector(String dosha, String value, Function(String?) onChanged) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          dosha,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: value,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          ),
-          items: const [
-            DropdownMenuItem(value: 'Low', child: Text('Low')),
-            DropdownMenuItem(value: 'Moderate', child: Text('Moderate')),
-            DropdownMenuItem(value: 'High', child: Text('High')),
-          ],
-          onChanged: onChanged,
-        ),
-      ],
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Ayurvedic Assessment'),
+        title: const Text('Patient Assessment'),
+        backgroundColor: const Color(0xFF2E7D32),
+        foregroundColor: Colors.white,
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text(
-              'Patient: ${widget.patientName}',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Ayurvedic Assessment',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: const Color(0xFF2E7D32),
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 8),
+              Text(
+                'Patient ID: ${widget.patientId}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 24),
 
-            // Prakriti Assessment
-            const Text(
-              'Prakriti (Body Constitution)',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.green,
+              // Chief Complaints
+              TextFormField(
+                controller: _chiefComplaintsController,
+                decoration: const InputDecoration(
+                  labelText: 'Chief Complaints',
+                  hintText: 'Main health concerns or symptoms',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.healing),
+                ),
+                maxLines: 3,
+                validator: (v) =>
+                v == null || v.isEmpty ? 'Enter chief complaints' : null,
               ),
-            ),
-            const SizedBox(height: 16),
-            _buildPrakritiSelector('Vata', _vata, (value) {
-              setState(() => _vata = value!);
-            }),
-            const SizedBox(height: 16),
-            _buildPrakritiSelector('Pitta', _pitta, (value) {
-              setState(() => _pitta = value!);
-            }),
-            const SizedBox(height: 16),
-            _buildPrakritiSelector('Kapha', _kapha, (value) {
-              setState(() => _kapha = value!);
-            }),
+              const SizedBox(height: 16),
 
-            const SizedBox(height: 32),
+              // Medical History
+              TextFormField(
+                controller: _medicalHistoryController,
+                decoration: const InputDecoration(
+                  labelText: 'Medical History',
+                  hintText: 'Past illnesses, surgeries, conditions',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.history),
+                ),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
 
-            // Chief Complaint
-            const Text(
-              'Chief Complaint',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.green,
+              // Current Medications
+              TextFormField(
+                controller: _currentMedicationsController,
+                decoration: const InputDecoration(
+                  labelText: 'Current Medications',
+                  hintText: 'List all current medications',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.medication),
+                ),
+                maxLines: 2,
               ),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _chiefComplaintController,
-              decoration: const InputDecoration(
-                hintText: 'Primary reason for consultation',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 2,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter chief complaint';
-                }
-                return null;
-              },
-            ),
+              const SizedBox(height: 16),
 
-            const SizedBox(height: 32),
+              // Allergies
+              TextFormField(
+                controller: _allergiesController,
+                decoration: const InputDecoration(
+                  labelText: 'Allergies',
+                  hintText: 'Any known allergies',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.warning_amber),
+                ),
+                maxLines: 2,
+              ),
+              const SizedBox(height: 24),
 
-            // Symptoms Checklist
-            const Text(
-              'Symptoms Checklist',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.green,
+              // Prakriti (Constitution)
+              DropdownButtonFormField<String>(
+                value: _prakriti,
+                decoration: const InputDecoration(
+                  labelText: 'Prakriti (Body Constitution)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'Vata', child: Text('Vata')),
+                  DropdownMenuItem(value: 'Pitta', child: Text('Pitta')),
+                  DropdownMenuItem(value: 'Kapha', child: Text('Kapha')),
+                  DropdownMenuItem(value: 'Vata-Pitta', child: Text('Vata-Pitta')),
+                  DropdownMenuItem(value: 'Pitta-Kapha', child: Text('Pitta-Kapha')),
+                  DropdownMenuItem(value: 'Vata-Kapha', child: Text('Vata-Kapha')),
+                ],
+                onChanged: (v) => setState(() => _prakriti = v!),
               ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Select all that apply',
-              style: TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 16),
-            ..._symptoms.keys.map((symptom) {
-              return CheckboxListTile(
-                title: Text(symptom),
-                value: _symptoms[symptom],
-                onChanged: (value) {
-                  setState(() => _symptoms[symptom] = value ?? false);
-                },
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-              );
-            }),
+              const SizedBox(height: 16),
 
-            const SizedBox(height: 32),
+              // Digestive Health
+              DropdownButtonFormField<String>(
+                value: _digestiveHealth,
+                decoration: const InputDecoration(
+                  labelText: 'Digestive Health',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.restaurant),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'Good', child: Text('Good')),
+                  DropdownMenuItem(value: 'Moderate', child: Text('Moderate')),
+                  DropdownMenuItem(value: 'Poor', child: Text('Poor')),
+                ],
+                onChanged: (v) => setState(() => _digestiveHealth = v!),
+              ),
+              const SizedBox(height: 16),
 
-            // Additional Notes
-            const Text(
-              'Additional Notes',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.green,
+              // Sleep Quality
+              DropdownButtonFormField<String>(
+                value: _sleepQuality,
+                decoration: const InputDecoration(
+                  labelText: 'Sleep Quality',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.bedtime),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'Good', child: Text('Good')),
+                  DropdownMenuItem(value: 'Moderate', child: Text('Moderate')),
+                  DropdownMenuItem(value: 'Poor', child: Text('Poor')),
+                ],
+                onChanged: (v) => setState(() => _sleepQuality = v!),
               ),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _notesController,
-              decoration: const InputDecoration(
-                hintText: 'Any additional observations or notes',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 4,
-            ),
+              const SizedBox(height: 16),
 
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: _isLoading ? null : _saveAssessment,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
+              // Stress Level
+              DropdownButtonFormField<String>(
+                value: _stressLevel,
+                decoration: const InputDecoration(
+                  labelText: 'Stress Level',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.psychology),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'Low', child: Text('Low')),
+                  DropdownMenuItem(value: 'Moderate', child: Text('Moderate')),
+                  DropdownMenuItem(value: 'High', child: Text('High')),
+                ],
+                onChanged: (v) => setState(() => _stressLevel = v!),
               ),
-              child: _isLoading
-                  ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-                  : const Text(
-                'Save Assessment & Select Therapy',
-                style: TextStyle(fontSize: 16),
+              const SizedBox(height: 32),
+
+              ElevatedButton.icon(
+                onPressed: _loading ? null : _saveAssessment,
+                icon: _loading
+                    ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+                    : const Icon(Icons.save),
+                label: Text(_loading ? 'Saving...' : 'Save & Continue to Templates'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2E7D32),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.all(16),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

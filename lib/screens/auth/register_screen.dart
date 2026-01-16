@@ -14,10 +14,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _authService = AuthService();
 
-  String _selectedRole = 'patient';
-  bool _isLoading = false;
+  final _authService = AuthService();
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -31,7 +30,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
+    setState(() => _loading = true);
 
     try {
       await _authService.registerUser(
@@ -39,18 +38,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
         password: _passwordController.text,
         name: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
-        role: _selectedRole,
       );
-
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Registration failed: ${e.toString()}')),
-        );
-      }
+      // DO NOTHING AFTER REGISTER
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Registration failed')),
+      );
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -58,98 +54,46 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Register')),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: AutofillGroup(
-              child: Column(
-                children: [
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Full Name',
-                      prefixIcon: Icon(Icons.person),
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (v) =>
-                    v == null || v.isEmpty ? 'Enter name' : null,
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    autofillHints: const [AutofillHints.email],
-                    enableSuggestions: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: Icon(Icons.email),
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (v) =>
-                    v == null || !v.contains('@') ? 'Enter valid email' : null,
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  TextFormField(
-                    controller: _phoneController,
-                    keyboardType: TextInputType.phone,
-                    autofillHints: const [AutofillHints.telephoneNumber],
-                    decoration: const InputDecoration(
-                      labelText: 'Phone',
-                      prefixIcon: Icon(Icons.phone),
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    autofillHints: const [AutofillHints.newPassword],
-                    enableSuggestions: false,
-                    decoration: const InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: Icon(Icons.lock),
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (v) =>
-                    v != null && v.length >= 6 ? null : 'Min 6 chars',
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  DropdownButtonFormField<String>(
-                    value: _selectedRole,
-                    decoration: const InputDecoration(
-                      labelText: 'Role',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                          value: 'doctor', child: Text('Doctor')),
-                      DropdownMenuItem(
-                          value: 'patient', child: Text('Patient')),
-                    ],
-                    onChanged: (v) => setState(() => _selectedRole = v!),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  ElevatedButton(
-                    onPressed: _isLoading ? null : _register,
-                    child: _isLoading
-                        ? const CircularProgressIndicator(strokeWidth: 2)
-                        : const Text('Register'),
-                  ),
-                ],
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: 'Name'),
+                validator: (v) =>
+                v == null || v.isEmpty ? 'Required' : null,
               ),
-            ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _emailController,
+                decoration: const InputDecoration(labelText: 'Email'),
+                validator: (v) =>
+                v == null || !v.contains('@') ? 'Invalid email' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _phoneController,
+                decoration: const InputDecoration(labelText: 'Phone'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _passwordController,
+                decoration: const InputDecoration(labelText: 'Password'),
+                obscureText: true,
+                validator: (v) =>
+                v == null || v.length < 6 ? 'Min 6 chars' : null,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _loading ? null : _register,
+                child: _loading
+                    ? const CircularProgressIndicator()
+                    : const Text('Register'),
+              ),
+            ],
           ),
         ),
       ),
