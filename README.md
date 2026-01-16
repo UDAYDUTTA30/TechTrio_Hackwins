@@ -69,7 +69,7 @@ Frontend (Flutter App)
 ## Tech Stack
 
 ### Frontend
-- **Flutter** – Cross-platform UI (Android & Web)
+- **Flutter** – Android 
 
 ### Backend & Cloud
 - **Firebase Authentication** – Secure user login and role management
@@ -77,8 +77,6 @@ Frontend (Flutter App)
 - **Cloud Functions** – Serverless backend logic
 - **Firebase Cloud Messaging (FCM)** – Notifications and alerts
 
-### AI & Analytics
-- **Google Gemini API / Vertex AI** – Feedback analysis and insights
-- **Firestore Queries / BigQuery (Future Scope)** – Analytics and reporting
+### AI 
+- Google Gemini API– Feedback analysis and insights
 
----
