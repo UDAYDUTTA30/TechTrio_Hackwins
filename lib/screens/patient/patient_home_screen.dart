@@ -1,12 +1,5 @@
-
 // lib/screens/patient/patient_home_screen.dart
-
-// Add missing import at top
 import 'package:cloud_firestore/cloud_firestore.dart';
-
-// Add missing import at top
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/user_model.dart';
@@ -279,7 +272,6 @@ class PatientHomeScreen extends StatelessWidget {
   }
 
   Future<PatientModel?> _getPatientByUserId(String userId) async {
-    final firestore = FirestoreService();
     final snapshot = await FirebaseFirestore.instance
         .collection('patients')
         .where('userId', isEqualTo: userId)
@@ -293,8 +285,6 @@ class PatientHomeScreen extends StatelessWidget {
   }
 
   void _showPrecautionsDialog(BuildContext context, TherapyPlanModel plan) {
-    // For this demo, using dummy precautions
-    // In real app, fetch from template
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -413,4 +403,3 @@ class _ProgressStat extends StatelessWidget {
     );
   }
 }
-

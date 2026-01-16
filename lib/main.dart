@@ -5,22 +5,28 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'screens/auth/login_screen.dart';
 import 'utils/role_router.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(const PanchakarmaApp());
+
+  // Initialize notifications
+  await NotificationService.initialize();
+
+  runApp(const AyurSetuApp());
 }
 
-class PanchakarmaApp extends StatelessWidget {
-  const PanchakarmaApp({super.key});
+class AyurSetuApp extends StatelessWidget {
+  const AyurSetuApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Panchakarma Management',
+      title: 'AyurSetu',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.green,

@@ -8,6 +8,7 @@ import '../../models/feedback_model.dart';
 import '../../services/firestore_service.dart';
 import '../../services/gemini_service.dart';
 import 'assessment_screen.dart';
+import 'manage_session_screen.dart'; // ✅ FIXED: Uncommented
 
 class ViewFeedbackScreen extends StatefulWidget {
   final PatientModel patient;
@@ -550,24 +551,42 @@ class _ViewFeedbackScreenState extends State<ViewFeedbackScreen> {
 
                             return Card(
                               margin: const EdgeInsets.only(bottom: 12),
-                              child: ExpansionTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: hasCompleted
-                                      ? Colors.green[100]
-                                      : Colors.grey[200],
-                                  child: Icon(
-                                    hasCompleted ? Icons.check : Icons.schedule,
-                                    color: hasCompleted ? Colors.green : Colors.grey,
-                                  ),
-                                ),
-                                title: Text(
-                                  session.therapyName,
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                subtitle: Text(
-                                  '${DateFormat('MMM dd, yyyy').format(session.scheduledDate)} • ${session.duration}',
-                                ),
+                              child: Column(
                                 children: [
+                                  ListTile(
+                                    leading: CircleAvatar(
+                                      backgroundColor: hasCompleted
+                                          ? Colors.green[100]
+                                          : Colors.grey[200],
+                                      child: Icon(
+                                        hasCompleted ? Icons.check : Icons.schedule,
+                                        color: hasCompleted ? Colors.green : Colors.grey,
+                                      ),
+                                    ),
+                                    title: Text(
+                                      session.therapyName,
+                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                    subtitle: Text(
+                                      '${DateFormat('MMM dd, yyyy').format(session.scheduledDate)} • ${session.duration}',
+                                    ),
+                                    trailing: session.status == 'pending'
+                                        ? IconButton(
+                                      icon: const Icon(Icons.more_vert),
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => ManageSessionScreen(
+                                              session: session,
+                                              patient: widget.patient,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    )
+                                        : null,
+                                  ),
                                   if (feedback != null) ...[
                                     const Divider(),
                                     Padding(

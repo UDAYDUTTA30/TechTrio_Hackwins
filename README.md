@@ -1,16 +1,36 @@
-# panchkarma_app
+Panchakarma Management App
+Demo Credentials Document
 
-A new Flutter project.
+This document provides dummy login credentials for demonstrating the AyurSetu (Panchakarma Management) App during project evaluation.
 
-## Getting Started
+--------------------------------------------------
 
-This project is a starting point for a Flutter application.
+Admin Login (Demo):
+Email: admin@clinic.com
+Password: admin1234
 
-A few resources to get you started if this is your first Flutter project:
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Doctor Login (Demo):
+Email: rp@gmail.com
+Password: 123456
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Email: sp@gmail.com
+Password: 123456
+
+
+Patient Login (Demo):
+Email: hv@gmail.com
+Password: 123456
+
+Email: sm@gmail.com
+Password: 123456
+
+--------------------------------------------------
+
+Important Notes:
+• These credentials are created only for demo purposes
+• No real patient or doctor data is used
+• Authentication is handled using Firebase Authentication
+• App functionality is demonstrated in the attached project video
+
+--------------------------------------------------

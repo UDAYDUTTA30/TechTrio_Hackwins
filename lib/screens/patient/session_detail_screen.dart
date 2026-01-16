@@ -103,7 +103,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isCompleted = widget.session.status == 'completed';
+    // ✅ FIXED: Use model helper for gating
+    final canSubmitFeedback = widget.session.canReceiveFeedback;
 
     return Scaffold(
       appBar: AppBar(
@@ -115,6 +116,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         future: firestoreService.getSessionFeedback(widget.session.sessionId),
         builder: (context, feedbackSnapshot) {
           final feedback = feedbackSnapshot.data;
+          final hasFeedback = feedback != null;
 
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -138,7 +140,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                               ),
                             ),
                           ),
-                          if (isCompleted)
+                          if (canSubmitFeedback)
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 12,
@@ -269,8 +271,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
 
               const SizedBox(height: 24),
 
-              // Feedback Section
-              if (feedback != null) ...[
+              // ✅ FIXED: Feedback Section with proper gating
+              if (hasFeedback) ...[
                 const Text(
                   'Your Feedback',
                   style: TextStyle(
@@ -332,7 +334,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                     ),
                   ),
                 ),
-              ] else if (!isCompleted) ...[
+              ] else if (canSubmitFeedback) ...[
+                // ✅ Show button ONLY if session is completed
                 ElevatedButton.icon(
                   onPressed: () {
                     Navigator.push(
@@ -351,6 +354,28 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     backgroundColor: const Color(0xFF2E7D32),
                     foregroundColor: Colors.white,
+                  ),
+                ),
+              ] else ...[
+                // ✅ Show waiting message if not completed
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.lock_clock, color: Colors.orange),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Feedback will be available after your doctor marks this session as completed.',
+                          style: TextStyle(color: Colors.orange),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

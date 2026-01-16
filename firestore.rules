@@ -1,0 +1,88 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isDoctor() {
+      return isAuthenticated() && getUserRole() == 'doctor';
+    }
+
+    function isPatient() {
+      return isAuthenticated() && getUserRole() == 'patient';
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // Patients collection
+    match /patients/{patientId} {
+      allow read: if isAuthenticated();
+      allow create: if isDoctor() || isAdmin();
+      allow update: if isDoctor() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Therapy plans
+    match /therapy_plans/{planId} {
+      allow read: if isAuthenticated();
+      allow create: if isDoctor();
+      allow update: if isDoctor();
+      allow delete: if isAdmin();
+    }
+
+    // Sessions - STRICT DOCTOR AUTHORITY
+    match /sessions/{sessionId} {
+      allow read: if isAuthenticated();
+      allow create: if isDoctor();
+
+      // ✅ CRITICAL: Only doctor can modify sessions
+      allow update: if isDoctor() && (
+        // Doctor can update status, completedAt, completedBy
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'completedAt', 'completedBy', 'scheduledDate',
+                    'rescheduledFrom', 'cancellationReason'])
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // Feedback - Can only be submitted for completed sessions
+    match /feedback/{feedbackId} {
+      allow read: if isAuthenticated();
+
+      // ✅ Patient can create feedback only if session is completed
+      allow create: if isAuthenticated() &&
+        get(/databases/$(database)/documents/sessions/$(request.resource.data.sessionId)).data.status == 'completed';
+
+      allow update, delete: if false; // Feedback is immutable
+    }
+
+    // Therapy templates
+    match /therapy_templates/{templateId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Notifications
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isDoctor() || isAdmin(); // System creates notifications
+      allow update, delete: if isAdmin();
+    }
+  }
+}

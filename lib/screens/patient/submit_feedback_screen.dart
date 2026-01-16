@@ -21,20 +21,23 @@ class SubmitFeedbackScreen extends StatefulWidget {
 class _SubmitFeedbackScreenState extends State<SubmitFeedbackScreen> {
   final _formKey = GlobalKey<FormState>();
   final _commentsController = TextEditingController();
+  final _firestoreService = FirestoreService();
 
-  int _rating = 0;
-  final Map<String, bool> _symptoms = {
-    'Pain': false,
-    'Nausea': false,
-    'Dizziness': false,
-    'Fatigue': false,
-    'Headache': false,
-    'Improved Energy': false,
-    'Better Sleep': false,
-    'Reduced Stress': false,
-  };
+  int _rating = 3;
+  final List<String> _selectedSymptoms = [];
+  bool _loading = false;
 
-  bool _isLoading = false;
+  final List<String> _availableSymptoms = [
+    'Nausea',
+    'Dizziness',
+    'Headache',
+    'Fatigue',
+    'Muscle Pain',
+    'Discomfort',
+    'Sweating',
+    'Itching',
+    'Other',
+  ];
 
   @override
   void dispose() {
@@ -43,37 +46,29 @@ class _SubmitFeedbackScreenState extends State<SubmitFeedbackScreen> {
   }
 
   Future<void> _submitFeedback() async {
-    if (_rating == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please provide a rating')),
-      );
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
+    setState(() => _loading = true);
 
     try {
-      final firestoreService = FirestoreService();
-
+      // ✅ Create FeedbackModel matching the correct signature
       final feedback = FeedbackModel(
-        feedbackId: '',
+        feedbackId: '', // Will be set by Firestore
         sessionId: widget.session.sessionId,
         patientId: widget.patientId,
         rating: _rating,
         comments: _commentsController.text.trim(),
-        symptoms: _symptoms.entries
-            .where((entry) => entry.value)
-            .map((entry) => entry.key)
-            .toList(),
+        symptoms: _selectedSymptoms,
         createdAt: DateTime.now(),
       );
 
-      await firestoreService.submitFeedback(feedback);
+      // ✅ Call with correct signature
+      await _firestoreService.submitFeedback(feedback);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Feedback submitted successfully!'),
+            content: Text('Feedback submitted successfully'),
             backgroundColor: Colors.green,
           ),
         );
@@ -82,185 +77,272 @@ class _SubmitFeedbackScreenState extends State<SubmitFeedbackScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _loading = false);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Gate check: Only allow if session is completed
+    final canSubmit = widget.session.canReceiveFeedback;
+
+    if (!canSubmit) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Session Feedback'),
+          backgroundColor: const Color(0xFF2E7D32),
+          foregroundColor: Colors.white,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.lock_clock, size: 80, color: Colors.orange[300]),
+                const SizedBox(height: 24),
+                const Text(
+                  'Feedback Not Available Yet',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'You can submit feedback after your doctor marks this session as completed.',
+                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2E7D32),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Go Back'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // ✅ Main feedback form (UI preserved from original design)
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Session Feedback'),
+        title: const Text('Submit Feedback'),
+        backgroundColor: const Color(0xFF2E7D32),
+        foregroundColor: Colors.white,
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            // Session Info
-            Card(
-              color: Colors.blue[50],
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.session.therapyName,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Session Info Card
+              Card(
+                color: Colors.green[50],
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.session.therapyName,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Session #${widget.session.sessionNumber}',
-                      style: const TextStyle(color: Colors.grey),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Rating
-            const Text(
-              'How was your session?',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Center(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(5, (index) {
-                  return IconButton(
-                    iconSize: 48,
-                    icon: Icon(
-                      index < _rating ? Icons.star : Icons.star_border,
-                      color: Colors.amber,
-                    ),
-                    onPressed: () {
-                      setState(() => _rating = index + 1);
-                    },
-                  );
-                }),
-              ),
-            ),
-            if (_rating > 0)
-              Center(
-                child: Text(
-                  _getRatingText(_rating),
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
+                      const SizedBox(height: 4),
+                      Text(
+                        'Session #${widget.session.sessionNumber}',
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                    ],
                   ),
                 ),
               ),
 
-            const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
-            // Symptoms/Observations
-            const Text(
-              'How do you feel?',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Select all that apply',
-              style: TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 12),
-            ..._symptoms.keys.map((symptom) {
-              return CheckboxListTile(
-                title: Text(symptom),
-                value: _symptoms[symptom],
-                onChanged: (value) {
-                  setState(() => _symptoms[symptom] = value ?? false);
-                },
-                activeColor: Colors.green,
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-              );
-            }),
-
-            const SizedBox(height: 24),
-
-            // Comments
-            const Text(
-              'Additional Comments',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _commentsController,
-              decoration: const InputDecoration(
-                hintText: 'Share your experience, concerns, or any observations...',
-                border: OutlineInputBorder(),
-                alignLabelWithHint: true,
-              ),
-              maxLines: 5,
-            ),
-
-            const SizedBox(height: 32),
-
-            // Submit Button
-            ElevatedButton(
-              onPressed: _isLoading ? null : _submitFeedback,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-              ),
-              child: _isLoading
-                  ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
+              // Rating Section
+              const Text(
+                'How was your experience?',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                 ),
-              )
-                  : const Text(
-                'Submit Feedback',
-                style: TextStyle(fontSize: 16),
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(5, (index) {
+                          return IconButton(
+                            iconSize: 40,
+                            icon: Icon(
+                              index < _rating ? Icons.star : Icons.star_border,
+                              color: Colors.amber,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _rating = index + 1;
+                              });
+                            },
+                          );
+                        }),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _getRatingLabel(_rating),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: _getRatingColor(_rating),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Symptoms Section
+              const Text(
+                'Did you experience any symptoms?',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Select all that apply (optional)',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _availableSymptoms.map((symptom) {
+                  final isSelected = _selectedSymptoms.contains(symptom);
+                  return FilterChip(
+                    label: Text(symptom),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      setState(() {
+                        if (selected) {
+                          _selectedSymptoms.add(symptom);
+                        } else {
+                          _selectedSymptoms.remove(symptom);
+                        }
+                      });
+                    },
+                    selectedColor: Colors.orange[200],
+                    checkmarkColor: Colors.orange[900],
+                  );
+                }).toList(),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Comments Section
+              const Text(
+                'Additional Comments',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Share your thoughts about the session (optional)',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _commentsController,
+                maxLines: 5,
+                decoration: const InputDecoration(
+                  hintText: 'e.g., The therapy was relaxing and helped reduce my stress...',
+                  border: OutlineInputBorder(),
+                  alignLabelWithHint: true,
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Submit Button
+              ElevatedButton.icon(
+                onPressed: _loading ? null : _submitFeedback,
+                icon: _loading
+                    ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+                    : const Icon(Icons.check_circle),
+                label: Text(_loading ? 'Submitting...' : 'Submit Feedback'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2E7D32),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.all(16),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  String _getRatingText(int rating) {
+  String _getRatingLabel(int rating) {
     switch (rating) {
       case 1:
-        return 'Poor';
+        return 'Very Poor';
       case 2:
-        return 'Fair';
+        return 'Poor';
       case 3:
-        return 'Good';
+        return 'Average';
       case 4:
-        return 'Very Good';
+        return 'Good';
       case 5:
         return 'Excellent';
       default:
         return '';
     }
+  }
+
+  Color _getRatingColor(int rating) {
+    if (rating <= 2) return Colors.red;
+    if (rating == 3) return Colors.orange;
+    return Colors.green;
   }
 }

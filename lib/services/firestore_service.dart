@@ -141,7 +141,7 @@ class FirestoreService {
         .toList());
   }
 
-  // Update session status
+  // Update session status (generic - use with caution)
   Future<void> updateSessionStatus(String sessionId, String status) async {
     try {
       await _firestore
@@ -154,19 +154,92 @@ class FirestoreService {
     }
   }
 
+  // ✅ DOCTOR ONLY: Mark session as completed
+  Future<void> markSessionCompleted(String sessionId, String doctorId) async {
+    try {
+      await _firestore.collection('sessions').doc(sessionId).update({
+        'status': 'completed',
+        'completedAt': Timestamp.now(),
+        'completedBy': doctorId,
+      });
+    } catch (e) {
+      print('Mark session completed error: $e');
+      rethrow;
+    }
+  }
+
+  // ✅ DOCTOR ONLY: Reschedule session
+  Future<void> rescheduleSession(
+      String sessionId,
+      DateTime newDate,
+      String doctorId,
+      ) async {
+    try {
+      final session = await _firestore.collection('sessions').doc(sessionId).get();
+      final oldDate = (session.data()!['scheduledDate'] as Timestamp).toDate();
+
+      await _firestore.collection('sessions').doc(sessionId).update({
+        'scheduledDate': Timestamp.fromDate(newDate),
+        'rescheduledFrom': Timestamp.fromDate(oldDate),
+      });
+    } catch (e) {
+      print('Reschedule session error: $e');
+      rethrow;
+    }
+  }
+
+  // ✅ DOCTOR ONLY: Cancel session
+  Future<void> cancelSession(String sessionId, String reason) async {
+    try {
+      await _firestore.collection('sessions').doc(sessionId).update({
+        'status': 'cancelled',
+        'cancellationReason': reason,
+      });
+    } catch (e) {
+      print('Cancel session error: $e');
+      rethrow;
+    }
+  }
+
+  // ✅ DOCTOR ONLY: Mark session as missed
+  Future<void> markSessionMissed(String sessionId) async {
+    try {
+      await _firestore.collection('sessions').doc(sessionId).update({
+        'status': 'missed',
+      });
+    } catch (e) {
+      print('Mark session missed error: $e');
+      rethrow;
+    }
+  }
+
   // ========== FEEDBACK OPERATIONS ==========
 
-  // Submit feedback
+  // ✅ FIXED: Submit feedback (NO AUTO-COMPLETION)
   Future<String> submitFeedback(FeedbackModel feedback) async {
     try {
+      // ✅ Verify session is completed before allowing feedback
+      final sessionDoc = await _firestore
+          .collection('sessions')
+          .doc(feedback.sessionId)
+          .get();
+
+      if (!sessionDoc.exists) {
+        throw Exception('Session not found');
+      }
+
+      final sessionStatus = sessionDoc.data()!['status'] as String;
+      if (sessionStatus != 'completed') {
+        throw Exception('Cannot submit feedback - session not completed by doctor');
+      }
+
       DocumentReference docRef = await _firestore
           .collection('feedback')
           .add(feedback.toMap());
 
       await docRef.update({'feedbackId': docRef.id});
 
-      // Mark session as completed
-      await updateSessionStatus(feedback.sessionId, 'completed');
+      // ✅ REMOVED: Auto-completion logic (doctor authority only)
 
       return docRef.id;
     } catch (e) {

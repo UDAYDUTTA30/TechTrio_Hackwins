@@ -7,10 +7,18 @@ class SessionModel {
   final int sessionNumber;
   final String therapyName;
   final DateTime scheduledDate;
-  final String status; // 'pending', 'completed', 'skipped'
+  final String status; // 'scheduled', 'completed', 'cancelled', 'missed'
   final List<String> prePrecautions;
   final List<String> postPrecautions;
   final String duration;
+
+  // NEW: Completion tracking (doctor authority)
+  final DateTime? completedAt;
+  final String? completedBy; // Doctor UID who marked complete
+
+  // NEW: Reschedule tracking
+  final DateTime? rescheduledFrom;
+  final String? cancellationReason;
 
   SessionModel({
     required this.sessionId,
@@ -22,6 +30,10 @@ class SessionModel {
     required this.prePrecautions,
     required this.postPrecautions,
     required this.duration,
+    this.completedAt,
+    this.completedBy,
+    this.rescheduledFrom,
+    this.cancellationReason,
   });
 
   Map<String, dynamic> toMap() {
@@ -35,6 +47,10 @@ class SessionModel {
       'prePrecautions': prePrecautions,
       'postPrecautions': postPrecautions,
       'duration': duration,
+      'completedAt': completedAt != null ? Timestamp.fromDate(completedAt!) : null,
+      'completedBy': completedBy,
+      'rescheduledFrom': rescheduledFrom != null ? Timestamp.fromDate(rescheduledFrom!) : null,
+      'cancellationReason': cancellationReason,
     };
   }
 
@@ -45,10 +61,24 @@ class SessionModel {
       sessionNumber: map['sessionNumber'] ?? 0,
       therapyName: map['therapyName'] ?? '',
       scheduledDate: (map['scheduledDate'] as Timestamp).toDate(),
-      status: map['status'] ?? 'pending',
+      status: map['status'] ?? 'scheduled',
       prePrecautions: List<String>.from(map['prePrecautions'] ?? []),
       postPrecautions: List<String>.from(map['postPrecautions'] ?? []),
       duration: map['duration'] ?? '',
+      completedAt: map['completedAt'] != null
+          ? (map['completedAt'] as Timestamp).toDate()
+          : null,
+      completedBy: map['completedBy'],
+      rescheduledFrom: map['rescheduledFrom'] != null
+          ? (map['rescheduledFrom'] as Timestamp).toDate()
+          : null,
+      cancellationReason: map['cancellationReason'],
     );
   }
+
+  // Helper to check if session can accept feedback
+  bool get canReceiveFeedback => status == 'completed';
+
+  // Helper to check if session is in the past
+  bool get isOverdue => scheduledDate.isBefore(DateTime.now()) && status == 'scheduled';
 }
